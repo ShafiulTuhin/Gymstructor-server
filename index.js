@@ -23,9 +23,11 @@ const client = new MongoClient(uri, {
 async function run() {
   try {
     const database = client.db("Gymstructor");
-    const profileCollections = database.collection("profile");
-    const classCollections = database.collection("class");
 
+    const classCollections = database.collection("class");
+    const forumCollections = database.collection("forums");
+
+    // All Classess APi's
     // Create new class API
     app.post("/api/classes", async (req, res) => {
       const myClass = req.body;
@@ -116,6 +118,31 @@ async function run() {
         console.error(error);
         res.status(500).send({ message: "Failed to fetch categories" });
       }
+    });
+
+    //All Forums API's:
+    // Create new Forum
+    app.post("/api/forums", async (req, res) => {
+      const forum = req.body;
+      const newFOrum = {
+        ...forum,
+        createdAt: new Date(),
+      };
+
+      const result = await forumCollections.insertOne(newFOrum);
+      res.send(result);
+    });
+    // Get own forum posts:
+    app.get("/api/forums/author/:authorId", async (req, res) => {
+      const authorId = req.params.authorId;
+
+      const query = {
+        authorId: authorId,
+      };
+
+      const result = await forumCollections.find(query).toArray();
+
+      res.send(result);
     });
     await client.db("admin").command({ ping: 1 });
     console.log(
