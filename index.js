@@ -28,6 +28,7 @@ async function run() {
     const forumCollections = database.collection("forums");
     const favoritesCollections = database.collection("favorites");
     const forumVotesCollections = database.collection("vote");
+    const newTrainerCollections = database.collection("newTrainer");
 
     // All Classess APi's
     // Create new class API
@@ -290,6 +291,23 @@ async function run() {
         console.log(error);
         res.status(500).send({ message: error.message });
       }
+    });
+
+    // Apply for trainer APi
+
+    app.post("/api/apply-for-trainer", async (req, res) => {
+      const newTrainer = req.body;
+
+      const newTrainerApplication = {
+        ...newTrainer,
+        status: "pending",
+        createdAt: new Date(),
+      };
+
+      const result = await newTrainerCollections.insertOne(
+        newTrainerApplication,
+      );
+      res.send(result);
     });
     await client.db("admin").command({ ping: 1 });
     console.log(
