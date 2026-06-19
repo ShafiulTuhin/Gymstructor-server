@@ -26,6 +26,7 @@ async function run() {
 
     const classCollections = database.collection("class");
     const forumCollections = database.collection("forums");
+    const favoritesCollections = database.collection("favorites");
 
     // All Classess APi's
     // Create new class API
@@ -42,7 +43,13 @@ async function run() {
       const result = await classCollections.insertOne(newClass);
       res.send(result);
     });
-
+    // Get all classes:
+    app.get("/api/classes", async (req, res) => {
+      const result = await classCollections
+        .find({ status: { $regex: /^pending$/i } })
+        .toArray();
+      res.send(result);
+    });
     // Get trainer's own classes
     app.get("/api/classes/trainer/:trainerId", async (req, res) => {
       const trainerId = req.params.trainerId;
@@ -86,7 +93,6 @@ async function run() {
       res.send(result);
     });
     // Delete Class
-
     app.delete("/api/classes/:id", async (req, res) => {
       const { id } = req.params;
       const query = {
@@ -95,6 +101,7 @@ async function run() {
       const result = classCollections.deleteOne(query);
       res.send(result);
     });
+
     app.get("/api/categories", async (req, res) => {
       try {
         const categories = await classCollections
@@ -143,6 +150,130 @@ async function run() {
       const result = await forumCollections.find(query).toArray();
 
       res.send(result);
+    });
+    // Get single forum
+    app.get("/api/forums/single/:id", async (req, res) => {
+      const id = req.params.id;
+
+      if (!ObjectId.isValid(id)) {
+        return res.status(400).send({ error: "Invalid forum id" });
+      }
+
+      const result = await forumCollections.findOne({
+        _id: new ObjectId(id),
+      });
+
+      res.send(result);
+    });
+    // Update forum:
+    app.patch("/api/forums/:id", async (req, res) => {
+      const { id } = req.params;
+
+      const updateForum = req.body;
+
+      const result = await forumCollections.updateOne(
+        { _id: new ObjectId(id) },
+        {
+          $set: updateForum,
+        },
+      );
+
+      res.send(result);
+    });
+    // Delete forum post
+    app.delete("/api/forums/:id", async (req, res) => {
+      const { id } = req.params;
+      const query = {
+        _id: new ObjectId(id),
+      };
+      const result = forumCollections.deleteOne(query);
+      res.send(result);
+    });
+
+    // Favorite APi:
+    app.post("/api/favorites/toggle", async (req, res) => {
+      try {
+        const { userId, classId } = req.body;
+
+        // ✅ validation
+        if (!userId || !classId) {
+          return res.status(400).send({ message: "Missing userId or classId" });
+        }
+
+        // ✅ convert to ObjectId (VERY IMPORTANT)
+        const query = {
+          userId: new ObjectId(userId),
+          classId: new ObjectId(classId),
+        };
+
+        const existing = await favoritesCollections.findOne(query);
+
+        if (existing) {
+          await favoritesCollections.deleteOne(query);
+          return res.send({ favorite: false });
+        }
+
+        await favoritesCollections.insertOne({
+          userId: new ObjectId(userId),
+          classId: new ObjectId(classId),
+          createdAt: new Date(),
+        });
+
+        return res.send({ favorite: true });
+      } catch (error) {
+        console.error("Toggle favorite error:", error);
+        res.status(500).send({ message: "Internal server error" });
+      }
+    });
+    // app.get("/api/favorites/:userId", async (req, res) => {
+    //   try {
+    //     const { userId } = req.params;
+
+    //     console.log("USER ID:", userId);
+
+    //     const favorites = await favoritesCollections
+    //       .find({ userId: String(userId) })
+    //       .toArray();
+
+    //     console.log("FAVORITES FOUND:", favorites);
+
+    //     const classIds = favorites.map((f) => f.classId);
+
+    //     const classes = await classCollections
+    //       .find({
+    //         _id: { $in: classIds.map((id) => new ObjectId(id)) },
+    //       })
+    //       .toArray();
+
+    //     res.send(classes);
+    //   } catch (error) {
+    //     console.log("ERROR:", error);
+    //     res.status(500).send({ message: error.message });
+    //   }
+    // });
+    app.get("/api/favorites/:userId", async (req, res) => {
+      try {
+        const { userId } = req.params;
+
+        const favorites = await favoritesCollections.find({}).toArray();
+
+        const filtered = favorites.filter(
+          (f) => String(f.userId) === String(userId),
+        );
+
+        const classIds = filtered.map((f) => f.classId);
+
+        const classes = await classCollections
+          .find({
+            _id: { $in: classIds.map((id) => new ObjectId(id)) },
+          })
+          .toArray();
+
+        res.send(classes);
+      } catch (error) {
+        console.log(error);
+        res.status(500).send({ message: error.message });
+      }
     });
     await client.db("admin").command({ ping: 1 });
     console.log(
