@@ -27,6 +27,7 @@ async function run() {
     const classCollections = database.collection("class");
     const forumCollections = database.collection("forums");
     const favoritesCollections = database.collection("favorites");
+    const forumVotesCollections = database.collection("vote");
 
     // All Classess APi's
     // Create new class API
@@ -139,6 +140,12 @@ async function run() {
       const result = await forumCollections.insertOne(newFOrum);
       res.send(result);
     });
+
+    // Get all classes:
+    app.get("/api/forums", async (req, res) => {
+      const result = await forumCollections.find().toArray();
+      res.send(result);
+    });
     // Get own forum posts:
     app.get("/api/forums/author/:authorId", async (req, res) => {
       const authorId = req.params.authorId;
@@ -225,32 +232,41 @@ async function run() {
         res.status(500).send({ message: "Internal server error" });
       }
     });
-    // app.get("/api/favorites/:userId", async (req, res) => {
-    //   try {
-    //     const { userId } = req.params;
+    // Forum post vote api
+    app.post("/api/forums/vote", async (req, res) => {
+      try {
+        const { userId, forumId, vote } = req.body;
 
-    //     console.log("USER ID:", userId);
+        if (!userId || !forumId || !vote) {
+          return res.status(400).send({ message: "Missing fields" });
+        }
 
-    //     const favorites = await favoritesCollections
-    //       .find({ userId: String(userId) })
-    //       .toArray();
+        const existing = await forumVotesCollections.findOne({
+          userId,
+          forumId,
+        });
 
-    //     console.log("FAVORITES FOUND:", favorites);
+        if (existing) {
+          return res.status(400).send({
+            message: "You have already voted",
+          });
+        }
 
-    //     const classIds = favorites.map((f) => f.classId);
+        await forumVotesCollections.insertOne({
+          userId,
+          forumId,
+          vote, // "like" or "dislike"
+          createdAt: new Date(),
+        });
 
-    //     const classes = await classCollections
-    //       .find({
-    //         _id: { $in: classIds.map((id) => new ObjectId(id)) },
-    //       })
-    //       .toArray();
+        res.send({ success: true, vote });
+      } catch (error) {
+        console.log(error);
+        res.status(500).send({ message: "Server error" });
+      }
+    });
 
-    //     res.send(classes);
-    //   } catch (error) {
-    //     console.log("ERROR:", error);
-    //     res.status(500).send({ message: error.message });
-    //   }
-    // });
+    // Favorite api
     app.get("/api/favorites/:userId", async (req, res) => {
       try {
         const { userId } = req.params;
