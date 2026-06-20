@@ -321,56 +321,7 @@ async function run() {
     });
 
     // Payment API
-    // app.post("/api/payment", async (req, res) => {
-    //   try {
-    //     const {
-    //       sessionId,
-    //       paymentIntentId,
-    //       userId,
-    //       classId,
-    //       amount,
-    //       currency,
-    //       paymentStatus,
-    //     } = req.body;
 
-    //     // Save payment
-    //     const paymentResult = await paymentCollections.insertOne({
-    //       sessionId,
-    //       paymentIntentId,
-    //       userId,
-    //       classId,
-    //       amount,
-    //       currency,
-    //       paymentStatus,
-    //       createdAt: new Date(),
-    //     });
-
-    //     // Create booking
-    //     const bookingResult = await bookingCollections.insertOne({
-    //       userId,
-    //       classId,
-    //       className,
-    //       price,
-    //       paymentId: paymentResult.insertedId,
-    //       bookingStatus: "confirmed",
-    //       createdAt: new Date(),
-    //     });
-
-    //     res.status(201).json({
-    //       success: true,
-    //       paymentId: paymentResult.insertedId,
-    //       bookingId: bookingResult.insertedId,
-    //       message: "Payment and booking completed successfully.",
-    //     });
-    //   } catch (error) {
-    //     console.error(error);
-
-    //     res.status(500).json({
-    //       success: false,
-    //       message: "Something went wrong.",
-    //     });
-    //   }
-    // });
     app.post("/api/payment", async (req, res) => {
       try {
         const {
@@ -383,6 +334,7 @@ async function run() {
           paymentStatus,
           className,
           userName,
+          trainerName,
         } = req.body;
 
         // 🔒 STEP 1: CHECK DUPLICATE
@@ -404,6 +356,7 @@ async function run() {
           classId,
           className,
           userName,
+          trainerName,
           amount,
           currency,
           paymentStatus,
@@ -432,6 +385,35 @@ async function run() {
       }
     });
     // Get user's booking by ID
+    // app.get("/api/payment/:userId", async (req, res) => {
+    //   try {
+    //     const { userId } = req.params;
+
+    //     if (!userId) {
+    //       return res.status(400).json({
+    //         success: false,
+    //         message: "userId is required",
+    //       });
+    //     }
+
+    //     const payments = await paymentCollections
+    //       .find({ userId })
+    //       .sort({ createdAt: -1 })
+    //       .toArray();
+
+    //     return res.status(200).json({
+    //       success: true,
+    //       data: payments,
+    //     });
+    //   } catch (error) {
+    //     console.error(error);
+
+    //     return res.status(500).json({
+    //       success: false,
+    //       message: "Something went wrong",
+    //     });
+    //   }
+    // });
     app.get("/api/payment/:userId", async (req, res) => {
       try {
         const { userId } = req.params;
@@ -443,17 +425,32 @@ async function run() {
           });
         }
 
+        // 🌟 FIX: Query using an $or condition to match BOTH string and ObjectId formats
+        let query = { userId: userId };
+
+        if (ObjectId.isValid(userId)) {
+          query = {
+            $or: [
+              { userId: userId }, // Matches if saved as a String
+              { userId: new ObjectId(userId) }, // Matches if saved as a MongoDB ObjectId
+            ],
+          };
+        }
+
         const payments = await paymentCollections
-          .find({ userId })
+          .find(query)
           .sort({ createdAt: -1 })
           .toArray();
 
+        // Log the payments to your server terminal so you can verify what's being sent
+        console.log(`Found ${payments.length} payments for user: ${userId}`);
+
         return res.status(200).json({
           success: true,
-          data: payments,
+          data: payments, // This will now return an empty array [] instead of breaking if no data exists
         });
       } catch (error) {
-        console.error(error);
+        console.error("Database Error on payment route:", error);
 
         return res.status(500).json({
           success: false,
