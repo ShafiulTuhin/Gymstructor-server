@@ -321,7 +321,6 @@ async function run() {
     });
 
     // Payment API
-
     app.post("/api/payment", async (req, res) => {
       try {
         const {
@@ -337,7 +336,6 @@ async function run() {
           trainerName,
         } = req.body;
 
-        // 🔒 STEP 1: CHECK DUPLICATE
         const existingPayment = await paymentCollections.findOne({ sessionId });
 
         if (existingPayment) {
@@ -348,7 +346,6 @@ async function run() {
           });
         }
 
-        // 🔥 STEP 2: CREATE PAYMENT
         const paymentResult = await paymentCollections.insertOne({
           sessionId,
           paymentIntentId,
@@ -363,7 +360,6 @@ async function run() {
           createdAt: new Date(),
         });
 
-        // 🔥 STEP 3: CREATE BOOKING (ONLY ONCE)
         const bookingResult = await bookingCollections.insertOne({
           userId,
           classId,
@@ -384,36 +380,7 @@ async function run() {
         return res.status(500).json({ success: false });
       }
     });
-    // Get user's booking by ID
-    // app.get("/api/payment/:userId", async (req, res) => {
-    //   try {
-    //     const { userId } = req.params;
-
-    //     if (!userId) {
-    //       return res.status(400).json({
-    //         success: false,
-    //         message: "userId is required",
-    //       });
-    //     }
-
-    //     const payments = await paymentCollections
-    //       .find({ userId })
-    //       .sort({ createdAt: -1 })
-    //       .toArray();
-
-    //     return res.status(200).json({
-    //       success: true,
-    //       data: payments,
-    //     });
-    //   } catch (error) {
-    //     console.error(error);
-
-    //     return res.status(500).json({
-    //       success: false,
-    //       message: "Something went wrong",
-    //     });
-    //   }
-    // });
+    // Payment details for a user booking
     app.get("/api/payment/:userId", async (req, res) => {
       try {
         const { userId } = req.params;
@@ -425,15 +392,11 @@ async function run() {
           });
         }
 
-        // 🌟 FIX: Query using an $or condition to match BOTH string and ObjectId formats
         let query = { userId: userId };
 
         if (ObjectId.isValid(userId)) {
           query = {
-            $or: [
-              { userId: userId }, // Matches if saved as a String
-              { userId: new ObjectId(userId) }, // Matches if saved as a MongoDB ObjectId
-            ],
+            $or: [{ userId: userId }, { userId: new ObjectId(userId) }],
           };
         }
 
@@ -442,12 +405,9 @@ async function run() {
           .sort({ createdAt: -1 })
           .toArray();
 
-        // Log the payments to your server terminal so you can verify what's being sent
-        console.log(`Found ${payments.length} payments for user: ${userId}`);
-
         return res.status(200).json({
           success: true,
-          data: payments, // This will now return an empty array [] instead of breaking if no data exists
+          data: payments,
         });
       } catch (error) {
         console.error("Database Error on payment route:", error);
