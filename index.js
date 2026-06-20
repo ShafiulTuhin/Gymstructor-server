@@ -294,7 +294,6 @@ async function run() {
     });
 
     // Apply for trainer APi
-
     app.post("/api/apply-for-trainer", async (req, res) => {
       const newTrainer = req.body;
 
@@ -307,6 +306,15 @@ async function run() {
       const result = await newTrainerCollections.insertOne(
         newTrainerApplication,
       );
+      res.send(result);
+    });
+    app.get("/api/apply-for-trainer/:applicantId", async (req, res) => {
+      const applicantId = req.params.applicantId;
+
+      const result = await newTrainerCollections.findOne({
+        applicantId: applicantId,
+      });
+
       res.send(result);
     });
     await client.db("admin").command({ ping: 1 });
