@@ -29,6 +29,8 @@ async function run() {
     const favoritesCollections = database.collection("favorites");
     const forumVotesCollections = database.collection("vote");
     const newTrainerCollections = database.collection("newTrainer");
+    const paymentCollections = database.collection("payment");
+    const bookingCollections = database.collection("booking");
 
     // All Classess APi's
     // Create new class API
@@ -316,6 +318,148 @@ async function run() {
       });
 
       res.send(result);
+    });
+
+    // Payment API
+    // app.post("/api/payment", async (req, res) => {
+    //   try {
+    //     const {
+    //       sessionId,
+    //       paymentIntentId,
+    //       userId,
+    //       classId,
+    //       amount,
+    //       currency,
+    //       paymentStatus,
+    //     } = req.body;
+
+    //     // Save payment
+    //     const paymentResult = await paymentCollections.insertOne({
+    //       sessionId,
+    //       paymentIntentId,
+    //       userId,
+    //       classId,
+    //       amount,
+    //       currency,
+    //       paymentStatus,
+    //       createdAt: new Date(),
+    //     });
+
+    //     // Create booking
+    //     const bookingResult = await bookingCollections.insertOne({
+    //       userId,
+    //       classId,
+    //       className,
+    //       price,
+    //       paymentId: paymentResult.insertedId,
+    //       bookingStatus: "confirmed",
+    //       createdAt: new Date(),
+    //     });
+
+    //     res.status(201).json({
+    //       success: true,
+    //       paymentId: paymentResult.insertedId,
+    //       bookingId: bookingResult.insertedId,
+    //       message: "Payment and booking completed successfully.",
+    //     });
+    //   } catch (error) {
+    //     console.error(error);
+
+    //     res.status(500).json({
+    //       success: false,
+    //       message: "Something went wrong.",
+    //     });
+    //   }
+    // });
+    app.post("/api/payment", async (req, res) => {
+      try {
+        const {
+          sessionId,
+          paymentIntentId,
+          userId,
+          classId,
+          amount,
+          currency,
+          paymentStatus,
+          className,
+          userName,
+        } = req.body;
+
+        // 🔒 STEP 1: CHECK DUPLICATE
+        const existingPayment = await paymentCollections.findOne({ sessionId });
+
+        if (existingPayment) {
+          return res.status(200).json({
+            success: true,
+            message: "Already processed",
+            paymentId: existingPayment._id,
+          });
+        }
+
+        // 🔥 STEP 2: CREATE PAYMENT
+        const paymentResult = await paymentCollections.insertOne({
+          sessionId,
+          paymentIntentId,
+          userId,
+          classId,
+          className,
+          userName,
+          amount,
+          currency,
+          paymentStatus,
+          createdAt: new Date(),
+        });
+
+        // 🔥 STEP 3: CREATE BOOKING (ONLY ONCE)
+        const bookingResult = await bookingCollections.insertOne({
+          userId,
+          classId,
+          className,
+          price: amount,
+          paymentId: paymentResult.insertedId,
+          bookingStatus: "confirmed",
+          createdAt: new Date(),
+        });
+
+        return res.status(201).json({
+          success: true,
+          paymentId: paymentResult.insertedId,
+          bookingId: bookingResult.insertedId,
+        });
+      } catch (error) {
+        console.error(error);
+        return res.status(500).json({ success: false });
+      }
+    });
+    // Get user's booking by ID
+    app.get("/api/payment/:userId", async (req, res) => {
+      try {
+        const { userId } = req.params;
+
+        if (!userId) {
+          return res.status(400).json({
+            success: false,
+            message: "userId is required",
+          });
+        }
+
+        const payments = await paymentCollections
+          .find({ userId })
+          .sort({ createdAt: -1 })
+          .toArray();
+
+        return res.status(200).json({
+          success: true,
+          data: payments,
+        });
+      } catch (error) {
+        console.error(error);
+
+        return res.status(500).json({
+          success: false,
+          message: "Something went wrong",
+        });
+      }
     });
     await client.db("admin").command({ ping: 1 });
     console.log(
