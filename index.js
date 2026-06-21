@@ -420,7 +420,85 @@ async function run() {
         res.status(500).send({ success: false, error: error.message });
       }
     });
+    // Edit Comment:
+    app.patch("/api/forums/:forumId/comments/:commentId", async (req, res) => {
+      try {
+        const { forumId, commentId } = req.params;
+        const { userId, text } = req.body;
 
+        const result = await forumCollections.updateOne(
+          {
+            _id: new ObjectId(forumId),
+            comments: {
+              $elemMatch: {
+                _id: new ObjectId(commentId),
+                userId: userId,
+              },
+            },
+          },
+          {
+            $set: {
+              "comments.$.text": text,
+            },
+          },
+        );
+
+        if (result.modifiedCount === 0) {
+          return res.status(403).send({
+            success: false,
+            message: "Not allowed to edit or comment not found",
+          });
+        }
+
+        res.send({
+          success: true,
+          message: "Comment updated",
+        });
+      } catch (error) {
+        res.status(500).send({ success: false, error: error.message });
+      }
+    });
+    // Delete COmment:
+    app.delete("/api/forums/:forumId/comments/:commentId", async (req, res) => {
+      try {
+        const { forumId, commentId } = req.params;
+        const { userId } = req.body;
+
+        const result = await forumCollections.updateOne(
+          {
+            _id: new ObjectId(forumId),
+            comments: {
+              $elemMatch: {
+                _id: new ObjectId(commentId),
+                userId: userId,
+              },
+            },
+          },
+          {
+            $pull: {
+              comments: {
+                _id: new ObjectId(commentId),
+                userId: userId,
+              },
+            },
+          },
+        );
+
+        if (result.modifiedCount === 0) {
+          return res.status(403).send({
+            success: false,
+            message: "Not allowed or comment not found",
+          });
+        }
+
+        res.send({
+          success: true,
+          message: "Comment deleted",
+        });
+      } catch (error) {
+        res.status(500).send({ success: false, error: error.message });
+      }
+    });
     // Favorite APi:
     app.post("/api/favorites/toggle", async (req, res) => {
       try {
