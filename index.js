@@ -469,8 +469,107 @@ async function run() {
     const newTrainerCollections = database.collection("newTrainer");
     const paymentCollections = database.collection("payment");
     const bookingCollections = database.collection("booking");
+    const userCollections = database.collection("user");
 
-    // All Classess APi's
+    // Get all users:
+    app.get("/api/users", async (req, res) => {
+      try {
+        const users = await userCollections.find().toArray();
+
+        res.json({
+          success: true,
+          users,
+        });
+      } catch (error) {
+        res.status(500).json({
+          success: false,
+          message: "Failed to fetch users",
+        });
+      }
+    });
+    // // Update user role
+    // app.patch(
+    //   "/api/users/:id",
+
+    //   async (req, res) => {
+    //     const { id } = req.params;
+
+    //     const { role } = req.body; // 👈 only take role
+
+    //     const result = await userCollections.updateOne(
+    //       { _id: new ObjectId(id) },
+    //       {
+    //         $set: { role }, // 👈 only update role
+    //       },
+    //     );
+
+    //     res.send(result);
+    //   },
+    // );
+
+    // //  Update user status
+    // app.patch(
+    //   "/api/users/:id",
+
+    //   async (req, res) => {
+    //     const { id } = req.params;
+
+    //     const { status } = req.body; // 👈 only take status
+
+    //     const result = await userCollections.updateOne(
+    //       { _id: new ObjectId(id) },
+    //       {
+    //         $set: { status }, // 👈 only update status
+    //       },
+    //     );
+
+    //     res.send(result);
+    //   },
+    // );
+    // A single, flexible update route
+    app.patch("/api/users/:id", async (req, res) => {
+      const { id } = req.params;
+      const { role, status } = req.body;
+
+      // Build the update object dynamically based on what was sent
+      const updateFields = {};
+      if (role !== undefined) updateFields.role = role;
+      if (status !== undefined) updateFields.status = status;
+
+      if (Object.keys(updateFields).length === 0) {
+        return res
+          .status(400)
+          .send({ message: "No valid fields provided for update" });
+      }
+
+      const result = await userCollections.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: updateFields },
+      );
+
+      res.send(result);
+    });
+    // Update user role
+    app.patch("/api/users/:id/role", async (req, res) => {
+      const { id } = req.params;
+      const { role } = req.body;
+      const result = await userCollections.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: { role } },
+      );
+      res.send(result);
+    });
+
+    // Update user status
+    app.patch("/api/users/:id/status", async (req, res) => {
+      const { id } = req.params;
+      const { status } = req.body;
+      const result = await userCollections.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: { status } },
+      );
+      res.send(result);
+    });
     // Create new class API
     app.post("/api/classes", async (req, res) => {
       const myClass = req.body;
@@ -486,10 +585,23 @@ async function run() {
       res.send(result);
     });
     // Get all classes:
+    // app.get("/api/classes", async (req, res) => {
+    //   const result = await classCollections
+    //     .find({ status: { $regex: /^approved$/i } })
+    //     .toArray();
+    //   res.send(result);
+    // });
     app.get("/api/classes", async (req, res) => {
-      const result = await classCollections
-        .find({ status: { $regex: /^approved$/i } })
-        .toArray();
+      const { status } = req.query;
+
+      let query = {};
+
+      if (status) {
+        query.status = { $regex: new RegExp(`^${status}$`, "i") };
+      }
+
+      const result = await classCollections.find(query).toArray();
+
       res.send(result);
     });
 
@@ -514,7 +626,7 @@ async function run() {
 
           return {
             id: cls._id,
-            name: cls.className,
+            className: cls.className,
             trainerName: cls.trainerName,
             price: cls.price,
             category: cls.category,
@@ -897,6 +1009,27 @@ async function run() {
         console.error("Database Error on payment route:", error);
 
         return res.status(500).json({
+          success: false,
+          message: "Something went wrong",
+        });
+      }
+    });
+    // Get all bookings and paymetn details:
+    app.get("/api/payments", async (req, res) => {
+      try {
+        const payments = await paymentCollections
+          .find()
+          .sort({ createdAt: -1 })
+          .toArray();
+
+        res.status(200).json({
+          success: true,
+          data: payments,
+        });
+      } catch (error) {
+        console.error(error);
+
+        res.status(500).json({
           success: false,
           message: "Something went wrong",
         });
