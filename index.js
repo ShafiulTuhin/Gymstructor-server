@@ -109,20 +109,73 @@ async function run() {
       res.send(result);
     });
 
+    // app.get("/api/classes", async (req, res) => {
+    //   const { status } = req.query;
+
+    //   let query = {};
+
+    //   if (status) {
+    //     query.status = { $regex: new RegExp(`^${status}$`, "i") };
+    //   }
+
+    //   const result = await classCollections.find(query).toArray();
+
+    //   res.send(result);
+    // });
     app.get("/api/classes", async (req, res) => {
-      const { status } = req.query;
+      try {
+        const { status, search, category, page, limit } = req.query;
 
-      let query = {};
+        const query = {};
 
-      if (status) {
-        query.status = { $regex: new RegExp(`^${status}$`, "i") };
+        // status
+        if (status) {
+          query.status = { $regex: new RegExp(`^${status}$`, "i") };
+        }
+
+        // search
+        if (search && search.trim() !== "") {
+          query.className = {
+            $regex: search.trim(),
+            $options: "i",
+          };
+        }
+
+        // category
+        if (category && category !== "all") {
+          query.category = {
+            $regex: new RegExp(`^${category}$`, "i"),
+          };
+        }
+
+        const pageNumber = Number(page || 1);
+        const limitNumber = Number(limit || 9);
+        const skip = (pageNumber - 1) * limitNumber;
+
+        const classes = await classCollections
+          .find(query)
+          .skip(skip)
+          .limit(limitNumber)
+          .toArray();
+
+        const totalClasses = await classCollections.countDocuments(query);
+
+        res.send({
+          classes,
+          totalPages: Math.ceil(totalClasses / limitNumber),
+          totalClasses,
+          currentPage: pageNumber,
+        });
+      } catch (error) {
+        console.error(error);
+        res.send({
+          classes: [],
+          totalPages: 0,
+          totalClasses: 0,
+          currentPage: 1,
+        });
       }
-
-      const result = await classCollections.find(query).toArray();
-
-      res.send(result);
     });
-
     // Get top classes by bookings
     app.get("/api/classes/top", async (req, res) => {
       const classes = await classCollections.find().toArray();
@@ -205,6 +258,29 @@ async function run() {
         { _id: new ObjectId(id) },
         {
           $set: updateClass,
+        },
+      );
+
+      res.send(result);
+    });
+    // Update class(for admin)
+    app.patch("/api/classes/:id/status", async (req, res) => {
+      const { id } = req.params;
+      const { status } = req.body;
+
+      const allowedStatus = ["pending", "approved", "rejected"];
+
+      if (!allowedStatus.includes(status)) {
+        return res.status(400).send({
+          success: false,
+          message: "Invalid status value",
+        });
+      }
+
+      const result = await classCollections.updateOne(
+        { _id: new ObjectId(id) },
+        {
+          $set: { status },
         },
       );
 
@@ -465,7 +541,6 @@ async function run() {
       res.send(result);
     });
     // Get all trainer application
-    // Get all users:
     app.get("/api/trainer/applications", async (req, res) => {
       try {
         const applications = await newTrainerCollections.find().toArray();
@@ -480,6 +555,23 @@ async function run() {
           message: "Failed to fetch users",
         });
       }
+    });
+    // Update trainer application(for admin)
+    app.patch("/api/trainer/applications/:id", async (req, res) => {
+      const { id } = req.params;
+      const { status, adminMessage } = req.body;
+
+      const result = await newTrainerCollections.updateOne(
+        { _id: new ObjectId(id) },
+        {
+          $set: {
+            status,
+            adminMessage,
+          },
+        },
+      );
+
+      res.send(result);
     });
     // Payment API
     app.post("/api/payment", async (req, res) => {
@@ -600,7 +692,7 @@ async function run() {
         });
       }
     });
-    await client.db("admin").command({ ping: 1 });
+    // await client.db("admin").command({ ping: 1 });
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!",
     );
