@@ -32,9 +32,70 @@ async function run() {
     const paymentCollections = database.collection("payment");
     const bookingCollections = database.collection("booking");
     const userCollections = database.collection("user");
+    const sessionCollections = database.collection("session");
+
+    const verifyToken = async (req, res, next) => {
+      const header = req?.headers.authorization;
+      if (!header) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      const token = header.split(" ")[1];
+      if (!token) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      const query = { token: token };
+      const session = await sessionCollections.findOne(query);
+      if (!session) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      const userId = session.userId;
+      const userQuery = {
+        _id: userId,
+      };
+      const user = await userCollections.findOne(userQuery);
+      if (!user) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      req.user = user;
+
+      next();
+      // try {
+      //   const { payload } = await jwtVerify(token, JWKS);
+      //   // console.log(payload);
+
+      // } catch (error) {
+      //   console.error(error); // <-- Important
+      //   return res.status(403).json({
+      //     message: "Forbidden",
+      //     error: error.message,
+      //   });
+      // }
+    };
+
+    const verifyUser = async (req, res, next) => {
+      if (req.user?.role !== "user") {
+        return res.status(403).send({ message: "Forbidden" });
+      }
+      next();
+    };
+    const verifyTrainer = async (req, res, next) => {
+      if (req.user?.role !== "trainer") {
+        return res.status(403).send({ message: "Forbidden" });
+      }
+      next();
+    };
+
+    const verifyAdmin = async (req, res, next) => {
+      if (req.user?.role !== "admin") {
+        return res.status(403).send({ message: "Forbidden" });
+      }
+      next();
+    };
 
     // Get all users:
-    app.get("/api/users", async (req, res) => {
+    app.get("/api/users", verifyToken, verifyAdmin, async (req, res) => {
       try {
         const users = await userCollections.find().toArray();
 
@@ -51,7 +112,7 @@ async function run() {
     });
 
     // A single update route
-    app.patch("/api/users/:id", async (req, res) => {
+    app.patch("/api/users/:id", verifyAdmin, verifyToken, async (req, res) => {
       const { id } = req.params;
       const { role, status } = req.body;
 
@@ -74,28 +135,38 @@ async function run() {
       res.send(result);
     });
     // Update user role
-    app.patch("/api/users/:id/role", async (req, res) => {
-      const { id } = req.params;
-      const { role } = req.body;
-      const result = await userCollections.updateOne(
-        { _id: new ObjectId(id) },
-        { $set: { role } },
-      );
-      res.send(result);
-    });
+    app.patch(
+      "/api/users/:id/role",
+      verifyAdmin,
+      verifyToken,
+      async (req, res) => {
+        const { id } = req.params;
+        const { role } = req.body;
+        const result = await userCollections.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: { role } },
+        );
+        res.send(result);
+      },
+    );
 
     // Update user status
-    app.patch("/api/users/:id/status", async (req, res) => {
-      const { id } = req.params;
-      const { status } = req.body;
-      const result = await userCollections.updateOne(
-        { _id: new ObjectId(id) },
-        { $set: { status } },
-      );
-      res.send(result);
-    });
+    app.patch(
+      "/api/users/:id/status",
+      verifyAdmin,
+      verifyToken,
+      async (req, res) => {
+        const { id } = req.params;
+        const { status } = req.body;
+        const result = await userCollections.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: { status } },
+        );
+        res.send(result);
+      },
+    );
     // Create new class API
-    app.post("/api/classes", async (req, res) => {
+    app.post("/api/classes", verifyToken, verifyTrainer, async (req, res) => {
       const myClass = req.body;
 
       const newClass = {
@@ -176,6 +247,26 @@ async function run() {
         });
       }
     });
+    // Get admin classes
+    app.get(
+      "/api/admin/classes",
+      verifyToken,
+      verifyAdmin,
+      async (req, res) => {
+        try {
+          const classes = await classCollections.find().toArray();
+
+          res.send({
+            classes,
+          });
+        } catch (error) {
+          console.error(error);
+          res.send({
+            classes: [],
+          });
+        }
+      },
+    );
     // Get top classes by bookings
     app.get("/api/classes/top", async (req, res) => {
       const classes = await classCollections.find().toArray();
@@ -222,34 +313,44 @@ async function run() {
       res.send(result);
     });
     // Get trainer's own classes
-    app.get("/api/classes/trainer/:trainerId", async (req, res) => {
-      const trainerId = req.params.trainerId;
+    app.get(
+      "/api/classes/trainer/:trainerId",
+      verifyToken,
+      verifyTrainer,
+      async (req, res) => {
+        const trainerId = req.params.trainerId;
 
-      const query = {
-        trainerId: trainerId,
-      };
+        const query = {
+          trainerId: trainerId,
+        };
 
-      const result = await classCollections.find(query).toArray();
+        const result = await classCollections.find(query).toArray();
 
-      res.send(result);
-    });
+        res.send(result);
+      },
+    );
 
     // Get single class API
-    app.get("/api/classes/single/:id", async (req, res) => {
-      const id = req.params.id;
+    app.get(
+      "/api/classes/single/:id",
+      verifyToken,
 
-      if (!ObjectId.isValid(id)) {
-        return res.status(400).send({ error: "Invalid class id" });
-      }
+      async (req, res) => {
+        const id = req.params.id;
 
-      const result = await classCollections.findOne({
-        _id: new ObjectId(id),
-      });
+        if (!ObjectId.isValid(id)) {
+          return res.status(400).send({ error: "Invalid class id" });
+        }
 
-      res.send(result);
-    });
+        const result = await classCollections.findOne({
+          _id: new ObjectId(id),
+        });
+
+        res.send(result);
+      },
+    );
     // Update class:
-    app.patch("/api/classes/:id", async (req, res) => {
+    app.patch("/api/classes/:id", verifyToken, async (req, res) => {
       const { id } = req.params;
 
       const updateClass = req.body;
@@ -321,21 +422,32 @@ async function run() {
       }
     });
 
-    //All Forums API's:
+    //=============================== All Forums API's:=============================
     // Create new Forum
-    app.post("/api/forums", async (req, res) => {
-      const forum = req.body;
-      const newFOrum = {
-        ...forum,
-        createdAt: new Date(),
-      };
+    app.post(
+      "/api/forums",
+      verifyToken,
+      verifyTrainer,
+      verifyAdmin,
+      async (req, res) => {
+        const forum = req.body;
+        const newFOrum = {
+          ...forum,
+          createdAt: new Date(),
+        };
 
-      const result = await forumCollections.insertOne(newFOrum);
-      res.send(result);
-    });
+        const result = await forumCollections.insertOne(newFOrum);
+        res.send(result);
+      },
+    );
 
     // Get all classes:
     app.get("/api/forums", async (req, res) => {
+      const result = await forumCollections.find().toArray();
+      res.send(result);
+    });
+    // For admin
+    app.get("/api/admin/forums", verifyToken, verifyAdmin, async (req, res) => {
       const result = await forumCollections.find().toArray();
       res.send(result);
     });
@@ -569,7 +681,7 @@ async function run() {
     });
 
     // Favorite api
-    app.get("/api/favorites/:userId", async (req, res) => {
+    app.get("/api/favorites/:userId", verifyToken, async (req, res) => {
       try {
         const { userId } = req.params;
 
@@ -595,20 +707,25 @@ async function run() {
     });
 
     // Apply for trainer APi
-    app.post("/api/apply-for-trainer", async (req, res) => {
-      const newTrainer = req.body;
+    app.post(
+      "/api/apply-for-trainer",
+      verifyToken,
+      verifyUser,
+      async (req, res) => {
+        const newTrainer = req.body;
 
-      const newTrainerApplication = {
-        ...newTrainer,
-        status: "pending",
-        createdAt: new Date(),
-      };
+        const newTrainerApplication = {
+          ...newTrainer,
+          status: "pending",
+          createdAt: new Date(),
+        };
 
-      const result = await newTrainerCollections.insertOne(
-        newTrainerApplication,
-      );
-      res.send(result);
-    });
+        const result = await newTrainerCollections.insertOne(
+          newTrainerApplication,
+        );
+        res.send(result);
+      },
+    );
     app.get("/api/apply-for-trainer/:applicantId", async (req, res) => {
       const applicantId = req.params.applicantId;
 
@@ -619,40 +736,50 @@ async function run() {
       res.send(result);
     });
     // Get all trainer application
-    app.get("/api/trainer/applications", async (req, res) => {
-      try {
-        const applications = await newTrainerCollections.find().toArray();
+    app.get(
+      "/api/trainer/applications",
+      verifyToken,
+      verifyAdmin,
+      async (req, res) => {
+        try {
+          const applications = await newTrainerCollections.find().toArray();
 
-        res.json({
-          success: true,
-          applications,
-        });
-      } catch (error) {
-        res.status(500).json({
-          success: false,
-          message: "Failed to fetch users",
-        });
-      }
-    });
+          res.json({
+            success: true,
+            applications,
+          });
+        } catch (error) {
+          res.status(500).json({
+            success: false,
+            message: "Failed to fetch users",
+          });
+        }
+      },
+    );
     // Update trainer application(for admin)
-    app.patch("/api/trainer/applications/:id", async (req, res) => {
-      const { id } = req.params;
-      const { status, adminMessage } = req.body;
+    app.patch(
+      "/api/trainer/applications/:id",
+      verifyToken,
+      verifyToken,
+      async (req, res) => {
+        const { id } = req.params;
+        const { status, adminMessage } = req.body;
 
-      const result = await newTrainerCollections.updateOne(
-        { _id: new ObjectId(id) },
-        {
-          $set: {
-            status,
-            adminMessage,
+        const result = await newTrainerCollections.updateOne(
+          { _id: new ObjectId(id) },
+          {
+            $set: {
+              status,
+              adminMessage,
+            },
           },
-        },
-      );
+        );
 
-      res.send(result);
-    });
+        res.send(result);
+      },
+    );
     // Payment API
-    app.post("/api/payment", async (req, res) => {
+    app.post("/api/payment", verifyToken, verifyUser, async (req, res) => {
       try {
         const {
           sessionId,
@@ -695,9 +822,11 @@ async function run() {
           userId,
           classId,
           className,
+          trainerName,
           price: amount,
           paymentId: paymentResult.insertedId,
           bookingStatus: "confirmed",
+
           createdAt: new Date(),
         });
 
@@ -711,41 +840,62 @@ async function run() {
         return res.status(500).json({ success: false });
       }
     });
-    // Payment details for a user booking
-    app.get("/api/payment/:userId", async (req, res) => {
-      try {
-        const { userId } = req.params;
+    // Booking details for a user booking
+    app.get(
+      "/api/bookings/:userId",
+      verifyToken,
+      verifyUser,
+      async (req, res) => {
+        try {
+          const { userId } = req.params;
 
-        if (!userId) {
-          return res.status(400).json({
+          if (!userId) {
+            return res.status(400).json({
+              success: false,
+              message: "userId is required",
+            });
+          }
+
+          let query = { userId: userId };
+
+          if (ObjectId.isValid(userId)) {
+            query = {
+              $or: [{ userId: userId }, { userId: new ObjectId(userId) }],
+            };
+          }
+
+          const bookings = await bookingCollections
+            .find(query)
+            .sort({ createdAt: -1 })
+            .toArray();
+
+          return res.status(200).json({
+            success: true,
+            data: bookings,
+          });
+        } catch (error) {
+          console.error("Database Error on payment route:", error);
+
+          return res.status(500).json({
             success: false,
-            message: "userId is required",
+            message: "Something went wrong",
           });
         }
-
-        let query = { userId: userId };
-
-        if (ObjectId.isValid(userId)) {
-          query = {
-            $or: [{ userId: userId }, { userId: new ObjectId(userId) }],
-          };
-        }
-
+      },
+    );
+    // Get all payment history
+    app.get("/api/payments", async (req, res) => {
+      try {
         const payments = await paymentCollections
-          .find(query)
+          .find()
           .sort({ createdAt: -1 })
           .toArray();
 
-        return res.status(200).json({
-          success: true,
-          data: payments,
-        });
+        res.send(payments);
       } catch (error) {
-        console.error("Database Error on payment route:", error);
-
-        return res.status(500).json({
-          success: false,
-          message: "Something went wrong",
+        console.error(error);
+        res.status(500).send({
+          message: "Failed to fetch payments",
         });
       }
     });
