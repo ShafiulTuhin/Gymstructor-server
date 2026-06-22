@@ -842,6 +842,7 @@ async function run() {
           className,
           userName,
           trainerName,
+          trainerId,
         } = req.body;
 
         const existingPayment = await paymentCollections.findOne({ sessionId });
@@ -872,6 +873,7 @@ async function run() {
           userId,
           classId,
           className,
+          trainerId,
           trainerName,
           price: amount,
           paymentId: paymentResult.insertedId,
@@ -891,52 +893,52 @@ async function run() {
       }
     });
     // Booking details for a user booking
+    // app.get(
+    //   "/api/bookings/:userId",
+    //   verifyToken,
+    //   verifyUser,
+    //   async (req, res) => {
+    //     try {
+    //       const { userId } = req.params;
+
+    //       if (!userId) {
+    //         return res.status(400).json({
+    //           success: false,
+    //           message: "userId is required",
+    //         });
+    //       }
+
+    //       let query = { userId: userId };
+
+    //       if (ObjectId.isValid(userId)) {
+    //         query = {
+    //           $or: [{ userId: userId }, { userId: new ObjectId(userId) }],
+    //         };
+    //       }
+
+    //       const bookings = await bookingCollections
+    //         .find(query)
+    //         .sort({ createdAt: -1 })
+    //         .toArray();
+
+    //       return res.status(200).json({
+    //         success: true,
+    //         data: bookings,
+    //       });
+    //     } catch (error) {
+    //       console.error("Database Error on payment route:", error);
+
+    //       return res.status(500).json({
+    //         success: false,
+    //         message: "Something went wrong",
+    //       });
+    //     }
+    //   },
+    // );
     app.get(
       "/api/bookings/:userId",
       verifyToken,
-      verifyUser,
-      async (req, res) => {
-        try {
-          const { userId } = req.params;
 
-          if (!userId) {
-            return res.status(400).json({
-              success: false,
-              message: "userId is required",
-            });
-          }
-
-          let query = { userId: userId };
-
-          if (ObjectId.isValid(userId)) {
-            query = {
-              $or: [{ userId: userId }, { userId: new ObjectId(userId) }],
-            };
-          }
-
-          const bookings = await bookingCollections
-            .find(query)
-            .sort({ createdAt: -1 })
-            .toArray();
-
-          return res.status(200).json({
-            success: true,
-            data: bookings,
-          });
-        } catch (error) {
-          console.error("Database Error on payment route:", error);
-
-          return res.status(500).json({
-            success: false,
-            message: "Something went wrong",
-          });
-        }
-      },
-    );
-    app.get(
-      "/api/bookings/:userId",
-      verifyToken,
-      verifyUser,
       async (req, res) => {
         try {
           const { userId } = req.params;
@@ -1012,6 +1014,23 @@ async function run() {
         });
       }
     });
+
+    // Get all bookings (trainer created classes)
+    app.post("/api/bookings/trainer-classes", verifyToken, async (req, res) => {
+      try {
+        const { classIds } = req.body;
+
+        const bookings = await bookingCollections
+          .find({ classId: { $in: classIds } }) // match any booking with these classIds
+          .toArray();
+
+        res.send(bookings);
+      } catch (error) {
+        console.error(error);
+        res.status(500).send([]);
+      }
+    });
+
     // await client.db("admin").command({ ping: 1 });
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!",
