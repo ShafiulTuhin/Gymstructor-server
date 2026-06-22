@@ -59,6 +59,7 @@ async function run() {
       }
 
       req.user = user;
+      // console.log(req.user);
 
       next();
       // try {
@@ -137,8 +138,9 @@ async function run() {
     // Update user role
     app.patch(
       "/api/users/:id/role",
-      verifyAdmin,
       verifyToken,
+      verifyAdmin,
+
       async (req, res) => {
         const { id } = req.params;
         const { role } = req.body;
@@ -153,8 +155,9 @@ async function run() {
     // Update user status
     app.patch(
       "/api/users/:id/status",
-      verifyAdmin,
       verifyToken,
+      verifyAdmin,
+
       async (req, res) => {
         const { id } = req.params;
         const { status } = req.body;
@@ -179,20 +182,7 @@ async function run() {
       const result = await classCollections.insertOne(newClass);
       res.send(result);
     });
-
-    // app.get("/api/classes", async (req, res) => {
-    //   const { status } = req.query;
-
-    //   let query = {};
-
-    //   if (status) {
-    //     query.status = { $regex: new RegExp(`^${status}$`, "i") };
-    //   }
-
-    //   const result = await classCollections.find(query).toArray();
-
-    //   res.send(result);
-    // });
+    // Get classes for all(No restriction)
     app.get("/api/classes", async (req, res) => {
       try {
         const { status, search, category, page, limit } = req.query;
@@ -247,6 +237,7 @@ async function run() {
         });
       }
     });
+
     // Get admin classes
     app.get(
       "/api/admin/classes",
@@ -267,7 +258,7 @@ async function run() {
         }
       },
     );
-    // Get top classes by bookings
+    // Get top classes by bookingCount(Public APi)
     app.get("/api/classes/top", async (req, res) => {
       const classes = await classCollections.find().toArray();
       const bookings = await paymentCollections.find().toArray();
@@ -302,7 +293,7 @@ async function run() {
 
       res.send(topClasses);
     });
-    // Latest class API:
+    // Latest class API(Public API):
     app.get("/api/classes/latest", async (req, res) => {
       const result = await classCollections
         .find({})
@@ -350,52 +341,92 @@ async function run() {
       },
     );
     // Update class:
-    app.patch("/api/classes/:id", verifyToken, async (req, res) => {
-      const { id } = req.params;
+    app.patch(
+      "/api/classes/:id",
+      verifyToken,
+      verifyTrainer,
 
-      const updateClass = req.body;
+      async (req, res) => {
+        const { id } = req.params;
 
-      const result = await classCollections.updateOne(
-        { _id: new ObjectId(id) },
-        {
-          $set: updateClass,
-        },
-      );
+        const updateClass = req.body;
 
-      res.send(result);
-    });
-    // Update class(for admin)
-    app.patch("/api/classes/:id/status", async (req, res) => {
-      const { id } = req.params;
-      const { status } = req.body;
+        const result = await classCollections.updateOne(
+          { _id: new ObjectId(id) },
+          {
+            $set: updateClass,
+          },
+        );
 
-      const allowedStatus = ["pending", "approved", "rejected"];
+        res.send(result);
+      },
+    );
+    // Update classes(for admin)
+    app.patch(
+      "/api/classes/:id/status",
+      verifyToken,
+      verifyAdmin,
+      async (req, res) => {
+        const { id } = req.params;
+        const { status } = req.body;
 
-      if (!allowedStatus.includes(status)) {
-        return res.status(400).send({
-          success: false,
-          message: "Invalid status value",
-        });
-      }
+        const allowedStatus = ["pending", "approved", "rejected"];
 
-      const result = await classCollections.updateOne(
-        { _id: new ObjectId(id) },
-        {
-          $set: { status },
-        },
-      );
+        if (!allowedStatus.includes(status)) {
+          return res.status(400).send({
+            success: false,
+            message: "Invalid status value",
+          });
+        }
 
-      res.send(result);
-    });
+        const result = await classCollections.updateOne(
+          { _id: new ObjectId(id) },
+          {
+            $set: { status },
+          },
+        );
+
+        res.send(result);
+      },
+    );
     // Delete Class
-    app.delete("/api/classes/:id", async (req, res) => {
-      const { id } = req.params;
-      const query = {
-        _id: new ObjectId(id),
-      };
-      const result = classCollections.deleteOne(query);
-      res.send(result);
-    });
+    // app.delete(
+    //   "/api/classes/:id",
+    //   verifyToken,
+    //   verifyAdmin,
+    //   verifyTrainer,
+    //   async (req, res) => {
+    //     const { id } = req.params;
+    //     const query = {
+    //       _id: new ObjectId(id),
+    //     };
+    //     const result = classCollections.deleteOne(query);
+    //     res.send(result);
+    //   },
+    // );
+    app.delete(
+      "/api/classes/:id",
+      verifyToken,
+
+      async (req, res) => {
+        const role = req.user?.role;
+
+        if (!["admin", "trainer"].includes(role)) {
+          return res.status(403).send({ message: "Forbidden" });
+        }
+
+        const { id } = req.params;
+
+        const result = await classCollections.deleteOne({
+          _id: new ObjectId(id),
+        });
+
+        return res.send({
+          success: true,
+          deletedCount: result.deletedCount,
+        });
+      },
+    );
 
     app.get("/api/categories", async (req, res) => {
       try {
@@ -427,9 +458,13 @@ async function run() {
     app.post(
       "/api/forums",
       verifyToken,
-      verifyTrainer,
-      verifyAdmin,
+
       async (req, res) => {
+        const role = req.user?.role;
+
+        if (!["admin", "trainer"].includes(role)) {
+          return res.status(403).send({ message: "Forbidden" });
+        }
         const forum = req.body;
         const newFOrum = {
           ...forum,
@@ -441,28 +476,33 @@ async function run() {
       },
     );
 
-    // Get all classes:
+    // Get all Forums (Public APi):
     app.get("/api/forums", async (req, res) => {
       const result = await forumCollections.find().toArray();
       res.send(result);
     });
-    // For admin
+    // For admin api
     app.get("/api/admin/forums", verifyToken, verifyAdmin, async (req, res) => {
       const result = await forumCollections.find().toArray();
       res.send(result);
     });
     // Get own forum posts:
-    app.get("/api/forums/author/:authorId", async (req, res) => {
-      const authorId = req.params.authorId;
+    app.get(
+      "/api/forums/author/:authorId",
+      verifyToken,
+      verifyTrainer,
+      async (req, res) => {
+        const authorId = req.params.authorId;
 
-      const query = {
-        authorId: authorId,
-      };
+        const query = {
+          authorId: authorId,
+        };
 
-      const result = await forumCollections.find(query).toArray();
+        const result = await forumCollections.find(query).toArray();
 
-      res.send(result);
-    });
+        res.send(result);
+      },
+    );
     // Get single forum
     app.get("/api/forums/single/:id", async (req, res) => {
       const id = req.params.id;
@@ -478,27 +518,37 @@ async function run() {
       res.send(result);
     });
     // Update forum:
-    app.patch("/api/forums/:id", async (req, res) => {
-      const { id } = req.params;
+    app.patch(
+      "/api/forums/:id",
+      verifyToken,
+      verifyTrainer,
+      async (req, res) => {
+        const { id } = req.params;
 
-      const updateForum = req.body;
+        const updateForum = req.body;
 
-      const result = await forumCollections.updateOne(
-        { _id: new ObjectId(id) },
-        {
-          $set: updateForum,
-        },
-      );
+        const result = await forumCollections.updateOne(
+          { _id: new ObjectId(id) },
+          {
+            $set: updateForum,
+          },
+        );
 
-      res.send(result);
-    });
+        res.send(result);
+      },
+    );
     // Delete forum post
-    app.delete("/api/forums/:id", async (req, res) => {
+    app.delete("/api/forums/:id", verifyToken, async (req, res) => {
+      const role = req.user?.role;
+
+      if (!["admin", "trainer"].includes(role)) {
+        return res.status(403).send({ message: "Forbidden" });
+      }
       const { id } = req.params;
       const query = {
         _id: new ObjectId(id),
       };
-      const result = forumCollections.deleteOne(query);
+      const result = await forumCollections.deleteOne(query);
       res.send(result);
     });
 
@@ -883,8 +933,50 @@ async function run() {
         }
       },
     );
+    app.get(
+      "/api/bookings/:userId",
+      verifyToken,
+      verifyUser,
+      async (req, res) => {
+        try {
+          const { userId } = req.params;
+
+          if (!userId) {
+            return res.status(400).json({
+              success: false,
+              message: "userId is required",
+            });
+          }
+
+          let query = { userId: userId };
+
+          if (ObjectId.isValid(userId)) {
+            query = {
+              $or: [{ userId: userId }, { userId: new ObjectId(userId) }],
+            };
+          }
+
+          const bookings = await bookingCollections
+            .find(query)
+            .sort({ createdAt: -1 })
+            .toArray();
+
+          return res.status(200).json({
+            success: true,
+            data: bookings,
+          });
+        } catch (error) {
+          console.error("Database Error on payment route:", error);
+
+          return res.status(500).json({
+            success: false,
+            message: "Something went wrong",
+          });
+        }
+      },
+    );
     // Get all payment history
-    app.get("/api/payments", async (req, res) => {
+    app.get("/api/payments", verifyToken, verifyAdmin, async (req, res) => {
       try {
         const payments = await paymentCollections
           .find()
@@ -899,10 +991,10 @@ async function run() {
         });
       }
     });
-    // Get all bookings and paymetn details:
-    app.get("/api/payments", async (req, res) => {
+    // Get all bookings details(for admin):
+    app.get("/api/bookings", verifyToken, verifyAdmin, async (req, res) => {
       try {
-        const payments = await paymentCollections
+        const payments = await bookingCollections
           .find()
           .sort({ createdAt: -1 })
           .toArray();
