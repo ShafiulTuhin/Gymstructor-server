@@ -696,6 +696,50 @@ async function run() {
         res.status(500).send({ message: "Internal server error" });
       }
     });
+    // Delete favorite:
+    app.delete(
+      "/api/favorites/:userId/:classId",
+      verifyToken,
+      async (req, res) => {
+        try {
+          const { userId, classId } = req.params;
+
+          // 1. Validate the formats
+          if (!ObjectId.isValid(userId) || !ObjectId.isValid(classId)) {
+            return res.status(400).json({
+              success: false,
+              message: "Invalid format for User ID or Class ID.",
+            });
+          }
+
+          // 2. Delete the entire document matching BOTH ObjectIds
+          const result = await favoritesCollections.deleteOne({
+            userId: new ObjectId(userId),
+            classId: new ObjectId(classId),
+          });
+
+          // 3. Check if a document was actually deleted
+          if (result.deletedCount === 0) {
+            return res.status(404).json({
+              success: false,
+              message: "Favorite item not found in database.",
+            });
+          }
+
+          return res.status(200).json({
+            success: true,
+            message: "Removed from favorites successfully!",
+          });
+        } catch (error) {
+          console.error("MongoDB Delete Error:", error);
+          return res.status(500).json({
+            success: false,
+            message: "Internal server error.",
+          });
+        }
+      },
+    );
+
     // Forum post vote api
     app.post("/api/forums/vote", async (req, res) => {
       try {
