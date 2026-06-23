@@ -1016,20 +1016,25 @@ async function run() {
     });
 
     // Get all bookings (trainer created classes)
-    app.post("/api/bookings/trainer-classes", verifyToken, async (req, res) => {
-      try {
-        const { classIds } = req.body;
+    app.post(
+      "/api/bookings/trainer-classes",
+      verifyToken,
+      verifyTrainer,
+      async (req, res) => {
+        try {
+          const { classIds } = req.body;
 
-        const bookings = await bookingCollections
-          .find({ classId: { $in: classIds } }) // match any booking with these classIds
-          .toArray();
+          const bookings = await bookingCollections
+            .find({ classId: { $in: classIds } }) // match any booking with these classIds
+            .toArray();
 
-        res.send(bookings);
-      } catch (error) {
-        console.error(error);
-        res.status(500).send([]);
-      }
-    });
+          res.send(bookings);
+        } catch (error) {
+          console.error(error);
+          res.status(500).send([]);
+        }
+      },
+    );
 
     // await client.db("admin").command({ ping: 1 });
     console.log(
