@@ -182,7 +182,7 @@ async function run() {
       const result = await classCollections.insertOne(newClass);
       res.send(result);
     });
-    // Get classes for all(No restriction)
+    // Get classes for all(Public)
     app.get("/api/classes", async (req, res) => {
       try {
         const { status, search, category, page, limit } = req.query;
@@ -390,20 +390,6 @@ async function run() {
       },
     );
     // Delete Class
-    // app.delete(
-    //   "/api/classes/:id",
-    //   verifyToken,
-    //   verifyAdmin,
-    //   verifyTrainer,
-    //   async (req, res) => {
-    //     const { id } = req.params;
-    //     const query = {
-    //       _id: new ObjectId(id),
-    //     };
-    //     const result = classCollections.deleteOne(query);
-    //     res.send(result);
-    //   },
-    // );
     app.delete(
       "/api/classes/:id",
       verifyToken,
@@ -862,7 +848,7 @@ async function run() {
     app.patch(
       "/api/trainer/applications/:id",
       verifyToken,
-      verifyToken,
+      verifyAdmin,
       async (req, res) => {
         const { id } = req.params;
         const { status, adminMessage } = req.body;
