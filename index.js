@@ -463,9 +463,29 @@ async function run() {
     );
 
     // Get all Forums (Public APi):
+
     app.get("/api/forums", async (req, res) => {
-      const result = await forumCollections.find().toArray();
-      res.send(result);
+      const page = parseInt(req.query.page) || 1;
+      const limit = parseInt(req.query.limit) || 9;
+
+      const skip = (page - 1) * limit;
+
+      const total = await forumCollections.countDocuments();
+
+      const forums = await forumCollections
+        .find()
+        .skip(skip)
+        .limit(limit)
+        .toArray();
+
+      res.send({
+        forums,
+        total,
+        currentPage: page,
+        totalPages: Math.ceil(total / limit),
+        hasNextPage: page < Math.ceil(total / limit),
+        hasPrevPage: page > 1,
+      });
     });
     // For admin api
     app.get("/api/admin/forums", verifyToken, verifyAdmin, async (req, res) => {
@@ -881,6 +901,7 @@ async function run() {
           userName,
           trainerName,
           trainerId,
+          schedule,
         } = req.body;
 
         const existingPayment = await paymentCollections.findOne({ sessionId });
@@ -913,6 +934,10 @@ async function run() {
           className,
           trainerId,
           trainerName,
+          schedule:
+            typeof schedule === "string"
+              ? JSON.parse(schedule)
+              : (schedule ?? []),
           price: amount,
           paymentId: paymentResult.insertedId,
           bookingStatus: "confirmed",
